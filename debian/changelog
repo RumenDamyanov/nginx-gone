@@ -1,0 +1,11 @@
+nginx-gone (0.1.0-1) unstable; urgency=medium
+
+  * Initial release
+  * gone on|off directive for per-context enable/disable
+  * gone_map_file directive for loading URI list from file
+  * gone_use_request_uri directive for matching $request_uri
+  * Exact URI matching via hash table
+  * PCRE regex matching (case-sensitive and case-insensitive)
+  * Server rewrite phase handler for early interception
+
+ -- Rumen Damyanov <contact@rumenx.com>  Sun, 30 Mar 2026 12:00:00 +0300

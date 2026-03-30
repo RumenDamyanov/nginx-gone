@@ -1,0 +1,30 @@
+load_module MODULE_PATH;
+
+events {
+    worker_connections 64;
+}
+
+http {
+    gone_map_file MAP_FILE;
+
+    server {
+        listen 127.0.0.1:TEST_PORT;
+        server_name localhost;
+
+        access_log TEST_DIR/access.log;
+        error_log TEST_DIR/error.log info;
+
+        gone on;
+
+        location / {
+            default_type text/plain;
+            return 200 "OK\n";
+        }
+
+        location /bypass {
+            gone off;
+            default_type text/plain;
+            return 200 "OK - bypass\n";
+        }
+    }
+}

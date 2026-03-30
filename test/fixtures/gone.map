@@ -1,0 +1,19 @@
+# Test gone.map file for nginx-gone module tests
+#
+# Contains a mix of exact matches and regex patterns.
+
+# Exact match entries
+/old-page.html 1
+/blog/2020/deleted-post 1
+/products/old-item 1
+/images/broken-banner.jpg 1
+/about/old-team 1
+
+# Case-sensitive regex: everything under /deprecated/
+~^/deprecated/ 1
+
+# Case-insensitive regex: old PHP pages
+~*^/old-(.*)\.php$ 1
+
+# Case-sensitive regex: year-based archive
+~^/archive/20[0-1][0-9]/ 1

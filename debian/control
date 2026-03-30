@@ -1,0 +1,18 @@
+Source: nginx-gone
+Section: web
+Priority: optional
+Maintainer: Rumen Damyanov <contact@rumenx.com>
+Build-Depends: debhelper-compat (= 13), build-essential
+Standards-Version: 4.6.0
+Homepage: https://github.com/RumenDamyanov/nginx-gone
+
+Package: nginx-gone
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         nginx (>= 1.18.0)
+Description: Nginx module to return HTTP 410 Gone for listed URIs
+ This module reads a URI list from a map file at configuration
+ time and returns HTTP 410 Gone for matching requests. Supports
+ exact string matches and PCRE regex patterns. Useful for cleanly
+ handling permanently removed URLs without map+if workarounds.

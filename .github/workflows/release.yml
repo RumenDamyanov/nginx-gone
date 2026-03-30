@@ -1,0 +1,259 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag (e.g. v0.1.0) to build"
+        required: false
+        default: ""
+      create_release:
+        description: "Create GitHub Release (true/false)"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    outputs:
+      tag_name: ${{ steps.resolve_tag.outputs.tag_name }}
+      version: ${{ steps.resolve_tag.outputs.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: [jammy, noble, plucky]
+        nginx_version: [1.27.0, 1.28.0]
+        arch: [amd64, arm64]
+    env:
+      NGINX_VERSION: ${{ matrix.nginx_version }}
+      UBUNTU_CODENAME: ${{ matrix.ubuntu }}
+      TARGET_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag (input or latest)
+        id: resolve_tag
+        run: |
+          set -euo pipefail
+          INPUT_TAG='${{ inputs.tag }}'
+          if [ -n "$INPUT_TAG" ]; then
+            TAG_NAME="$INPUT_TAG"
+          else
+            git fetch --tags --force
+            TAG_NAME=$(git describe --tags --abbrev=0 2>/dev/null || true)
+            if [ -z "$TAG_NAME" ]; then echo 'No tag provided and no existing tags found.' >&2; exit 1; fi
+          fi
+          echo "Using tag: $TAG_NAME"
+          git checkout "$TAG_NAME"
+          VERSION="${TAG_NAME#v}"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Determine base image
+        id: base
+        run: |
+          case "${UBUNTU_CODENAME}" in
+            jammy) echo "image=ubuntu:22.04" >> $GITHUB_OUTPUT ;;
+            noble) echo "image=ubuntu:24.04" >> $GITHUB_OUTPUT ;;
+            plucky) echo "image=ubuntu:24.10" >> $GITHUB_OUTPUT ;;
+            *) echo "Unknown codename"; exit 1 ;;
+          esac
+
+      - name: Build module
+        run: |
+          set -euxo pipefail
+          WORKDIR=$PWD
+          docker run --platform=linux/${TARGET_ARCH} --rm -v "$WORKDIR":/workspace -w /workspace ${{ steps.base.outputs.image }} /bin/bash -c "\
+            set -euxo pipefail; \
+            apt-get update; \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential wget libpcre2-dev zlib1g-dev ca-certificates file; \
+            mkdir -p release/build/${NGINX_VERSION}/${UBUNTU_CODENAME}/${TARGET_ARCH}; cd release/build/${NGINX_VERSION}/${UBUNTU_CODENAME}/${TARGET_ARCH}; \
+            wget -nv https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz; \
+            tar xzf nginx-${NGINX_VERSION}.tar.gz; cd nginx-${NGINX_VERSION}; \
+            ./configure --add-dynamic-module=/workspace/src --with-compat; \
+            make modules -j\$(nproc); \
+            cp objs/ngx_http_gone_module.so /workspace/ngx_http_gone_module-nginx${NGINX_VERSION}-ubuntu-${UBUNTU_CODENAME}-${TARGET_ARCH}.so; \
+            file objs/ngx_http_gone_module.so; \
+          "
+
+      - name: Package artifact
+        run: |
+          set -euxo pipefail
+          FN_BASE=nginx-gone_${VERSION}_nginx${NGINX_VERSION}_${UBUNTU_CODENAME}_${TARGET_ARCH}
+          mkdir -p pkg
+          cp LICENSE.md README.md CHANGELOG.md pkg/ || true
+          cp conf/example.conf pkg/ || true
+          cp ngx_http_gone_module-nginx${NGINX_VERSION}-ubuntu-${UBUNTU_CODENAME}-${TARGET_ARCH}.so pkg/
+
+          # Create install script
+          cat > pkg/install.sh << 'INSTALL_EOF'
+          #!/bin/bash
+          set -e
+
+          MODULE_NAME="ngx_http_gone_module"
+
+          SO_FILE=$(ls ${MODULE_NAME}*.so 2>/dev/null | head -1)
+          if [ -z "$SO_FILE" ]; then
+            echo "Error: Module .so file not found"
+            exit 1
+          fi
+
+          if [ -d "/usr/lib64/nginx/modules" ]; then
+            MODULE_DIR="/usr/lib64/nginx/modules"
+          elif [ -d "/usr/lib/nginx/modules" ]; then
+            MODULE_DIR="/usr/lib/nginx/modules"
+          else
+            MODULE_DIR="/etc/nginx/modules"
+            mkdir -p "$MODULE_DIR"
+          fi
+
+          echo "Installing $SO_FILE to $MODULE_DIR/"
+          cp "$SO_FILE" "$MODULE_DIR/${MODULE_NAME}.so"
+          chmod 644 "$MODULE_DIR/${MODULE_NAME}.so"
+
+          echo ""
+          echo "Installation complete!"
+          echo ""
+          echo "Next steps:"
+          echo "1. Add to nginx.conf (before http block):"
+          echo "   load_module modules/${MODULE_NAME}.so;"
+          echo ""
+          echo "2. Create a gone map file:"
+          echo "   /etc/nginx/maps/gone.map"
+          echo ""
+          echo "3. Add to http block:"
+          echo "   gone_map_file /etc/nginx/maps/gone.map;"
+          echo ""
+          echo "4. Add to server block:"
+          echo "   gone on;"
+          echo ""
+          echo "5. Test and reload:"
+          echo "   nginx -t && systemctl reload nginx"
+          INSTALL_EOF
+          chmod +x pkg/install.sh
+
+          # Create build info
+          cat > pkg/BUILDINFO.json << EOF
+          {
+            "moduleVersion": "${VERSION}",
+            "nginxVersion": "${NGINX_VERSION}",
+            "ubuntuCodename": "${UBUNTU_CODENAME}",
+            "arch": "${TARGET_ARCH}",
+            "gitCommit": "${GITHUB_SHA}",
+            "buildTimeUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "toolchain": "native gcc",
+            "dependencies": []
+          }
+          EOF
+
+          tar czf ${FN_BASE}.tar.gz -C pkg .
+          sha256sum ${FN_BASE}.tar.gz >> SHA256SUMS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.nginx_version }}-${{ matrix.ubuntu }}-${{ matrix.arch }}
+          path: |
+            *.tar.gz
+            SHA256SUMS
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build-release
+    if: ${{ inputs.create_release == 'true' }}
+    steps:
+      - name: Checkout for changelog
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: collected
+
+      - name: Consolidate checksums
+        run: |
+          set -euo pipefail
+          find collected -name SHA256SUMS -exec cat {} + > ALL_SHA256SUMS
+          sort -u ALL_SHA256SUMS > SHA256SUMS
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ needs.build-release.outputs.version }}"
+          echo "Extracting changelog for version $VERSION"
+
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "[" ver "]") || index($0, "["ver"]")) found=1
+              next
+            }
+            found { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $VERSION"
+          fi
+
+          echo "$NOTES" > release_notes.md
+
+      - name: Generate Release Notes
+        id: notes
+        run: |
+          {
+            echo 'notes<<EOF'
+            echo "## nginx-gone ${{ needs.build-release.outputs.tag_name }}"
+            echo ""
+            echo "### Changes"
+            cat release_notes.md
+            echo ""
+            echo "### Installation"
+            echo ""
+            echo "1. Download the tarball matching your nginx version, Ubuntu version, and architecture"
+            echo "2. Extract: \`tar xzf nginx-gone_*.tar.gz\`"
+            echo "3. Run: \`sudo ./install.sh\`"
+            echo ""
+            echo "### Build Matrix"
+            echo ""
+            echo "| NGINX | Ubuntu | Architecture |"
+            echo "|-------|--------|--------------|"
+            find collected -name '*.tar.gz' | sed 's/.*nginx-gone_[^_]*_nginx\([^_]*\)_\([^_]*\)_\([^.]*\).*/| \1 | \2 | \3 |/' | sort -u
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            find collected -name '*.tar.gz' -printf '%f\n' | sort
+            echo ""
+            echo "### SHA256 Checksums"
+            echo ""
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-release.outputs.tag_name }}
+          name: ${{ needs.build-release.outputs.tag_name }}
+          body: ${{ steps.notes.outputs.notes }}
+          files: |
+            collected/**/*.tar.gz
+            SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

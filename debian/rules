@@ -1,0 +1,68 @@
+#!/usr/bin/make -f
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+BUILDDIR = obj-$(DEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	mkdir -p $(BUILDDIR)
+
+	# Check if we're building with downloaded nginx source (release workflow)
+	# or system nginx-dev headers (PPA workflow)
+	if [ -n "$(NGINX_VERSION)" ] && [ -d "/project/headers/nginx-$(NGINX_VERSION)" ]; then \
+		echo "Building with downloaded nginx source (version $(NGINX_VERSION))..."; \
+		cd /project/headers/nginx-$(NGINX_VERSION) && \
+		gcc -c -fPIC \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/core \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/event \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/event/modules \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/os/unix \
+			-I/project/headers/nginx-$(NGINX_VERSION)/objs \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/http \
+			-I/project/headers/nginx-$(NGINX_VERSION)/src/http/modules \
+			$$(pkg-config --cflags libpcre2-8) \
+			-o /workspace/$(BUILDDIR)/ngx_http_gone_module.o \
+			/workspace/src/ngx_http_gone_module.c; \
+	else \
+		echo "Building with system nginx-dev headers..."; \
+		MODULE_PATH="$$(pwd)/src"; \
+		BUILD_DIR="$$(pwd)/$(BUILDDIR)"; \
+		NGINX_INCLUDES=""; \
+		for dir in /usr/include/nginx /usr/include/nginx/src/core /usr/include/nginx/src/event /usr/include/nginx/src/event/modules /usr/include/nginx/src/os/unix /usr/include/nginx/src/http /usr/include/nginx/src/http/modules; do \
+			if [ -d "$$dir" ]; then \
+				NGINX_INCLUDES="$$NGINX_INCLUDES -I$$dir"; \
+			fi; \
+		done; \
+		if gcc -shared -fPIC \
+			$$NGINX_INCLUDES \
+			$$(pkg-config --cflags libpcre2-8 2>/dev/null || echo "-I/usr/include/pcre2") \
+			-DNGX_HTTP_HEADERS \
+			-o $$BUILD_DIR/ngx_http_gone_module.so \
+			$$MODULE_PATH/ngx_http_gone_module.c; then \
+			echo "Compilation successful"; \
+		else \
+			echo "Compilation failed!"; \
+			exit 1; \
+		fi; \
+	fi
+
+	# For release workflow, create the shared library from the object file
+	if [ -n "$(NGINX_VERSION)" ] && [ -d "/project/headers/nginx-$(NGINX_VERSION)" ]; then \
+		gcc -shared \
+			-o $(BUILDDIR)/ngx_http_gone_module.so \
+			$(BUILDDIR)/ngx_http_gone_module.o; \
+	fi
+
+	echo "Build completed. Module location:"
+	ls -l $(BUILDDIR)/ngx_http_gone_module.so
+
+override_dh_auto_clean:
+	find $(BUILDDIR) -mindepth 1 -delete 2>/dev/null || true
+	rm -rf $(BUILDDIR)
+
+override_dh_auto_install:
+	echo "Installing nginx module..."
+	install -D -m 644 $(BUILDDIR)/ngx_http_gone_module.so \
+		debian/nginx-gone/usr/lib/nginx/modules/ngx_http_gone_module.so
