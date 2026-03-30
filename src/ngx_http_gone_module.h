@@ -17,6 +17,12 @@
 #define NGX_HTTP_GONE_VERSION "0.1.0"
 #define NGX_HTTP_GONE_VERSION_NUM 000100
 
+/* nginx does not define HTTP 410 Gone */
+#ifndef NGX_HTTP_GONE
+#define NGX_HTTP_GONE  410
+#endif
+
+#if (NGX_PCRE)
 /*
  * Compiled regex entry
  *
@@ -27,6 +33,7 @@ typedef struct
     ngx_regex_t *regex;
     ngx_str_t pattern;
 } ngx_http_gone_regex_t;
+#endif
 
 /*
  * Main configuration (http context)

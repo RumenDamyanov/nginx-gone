@@ -206,9 +206,9 @@ ngx_http_gone_parse_map_file(ngx_conf_t *cf, ngx_http_gone_main_conf_t *gmcf)
     ngx_array_t exact_keys;
     ngx_hash_key_t *hk;
     ngx_hash_init_t hash_init;
-    ngx_http_gone_regex_t *regex_entry;
     ngx_str_t full_path;
 #if (NGX_PCRE)
+    ngx_http_gone_regex_t *regex_entry;
     ngx_regex_compile_t rc;
     u_char errstr[NGX_MAX_CONF_ERRSTR];
 #endif
@@ -296,6 +296,7 @@ ngx_http_gone_parse_map_file(ngx_conf_t *cf, ngx_http_gone_main_conf_t *gmcf)
         return NGX_ERROR;
     }
 
+#if (NGX_PCRE)
     /* Initialize regex entries array */
     gmcf->regex_entries = ngx_array_create(cf->pool, 8,
                                            sizeof(ngx_http_gone_regex_t));
@@ -303,6 +304,7 @@ ngx_http_gone_parse_map_file(ngx_conf_t *cf, ngx_http_gone_main_conf_t *gmcf)
     {
         return NGX_ERROR;
     }
+#endif
 
     gmcf->exact_count = 0;
     gmcf->regex_count = 0;
@@ -489,11 +491,12 @@ ngx_http_gone_handler(ngx_http_request_t *r)
 {
     ngx_http_gone_main_conf_t *gmcf;
     ngx_http_gone_loc_conf_t *glcf;
-    ngx_http_gone_regex_t *regex_entries;
     ngx_str_t uri;
-    ngx_uint_t i, hash;
+    ngx_uint_t hash;
     void *value;
 #if (NGX_PCRE)
+    ngx_http_gone_regex_t *regex_entries;
+    ngx_uint_t i;
     ngx_int_t n;
 #endif
 
