@@ -144,6 +144,16 @@ make modules
 cp objs/ngx_http_gone_module.so /usr/lib/nginx/modules/
 ```
 
+## Related Projects
+
+Other nginx dynamic modules we maintain:
+
+| Module | Description | GitHub | OBS |
+|--------|-------------|--------|-----|
+| **nginx-torblocker** | Automatically block Tor exit node traffic | [GitHub](https://github.com/RumenDamyanov/nginx-torblocker) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-torblocker) |
+| **nginx-waf** | IP/CIDR-based access control with named lists and tag-based organization | [GitHub](https://github.com/RumenDamyanov/nginx-waf) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf) |
+| **nginx-cf-realip** | Auto-sync Cloudflare IP ranges and restore real client IPs | [GitHub](https://github.com/RumenDamyanov/nginx-cf-realip) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-cf-realip) |
+
 ## License
 
 BSD 3-Clause License. See [LICENSE.md](LICENSE.md).
