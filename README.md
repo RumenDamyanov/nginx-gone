@@ -150,9 +150,13 @@ Other nginx dynamic modules we maintain:
 
 | Module | Description | GitHub | OBS |
 |--------|-------------|--------|-----|
-| **nginx-torblocker** | Automatically block Tor exit node traffic | [GitHub](https://github.com/RumenDamyanov/nginx-torblocker) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-torblocker) |
+| **nginx-torblocker** | Control access from Tor exit nodes — block, allow, or Tor-only mode | [GitHub](https://github.com/RumenDamyanov/nginx-torblocker) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-torblocker) |
+| **nginx-cf-realip** | Automatic Cloudflare edge IP list fetcher for real client IP restoration | [GitHub](https://github.com/RumenDamyanov/nginx-cf-realip) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-cf-realip) |
 | **nginx-waf** | IP/CIDR-based access control with named lists and tag-based organization | [GitHub](https://github.com/RumenDamyanov/nginx-waf) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf) |
-| **nginx-cf-realip** | Auto-sync Cloudflare IP ranges and restore real client IPs | [GitHub](https://github.com/RumenDamyanov/nginx-cf-realip) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-cf-realip) |
+| **nginx-waf-api** | REST API daemon for dynamic nginx-waf IP list management | [GitHub](https://github.com/RumenDamyanov/nginx-waf-api) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf-api) |
+| **nginx-waf-feeds** | Automatic threat feed updater for nginx-waf | [GitHub](https://github.com/RumenDamyanov/nginx-waf-feeds) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf-feeds) |
+| **nginx-waf-ui** | Web management interface for nginx-waf | [GitHub](https://github.com/RumenDamyanov/nginx-waf-ui) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf-ui) |
+| **nginx-waf-lua** | OpenResty/Lua integration for nginx-waf | [GitHub](https://github.com/RumenDamyanov/nginx-waf-lua) | [OBS](https://build.opensuse.org/package/show/home:rumenx/nginx-waf-lua) |
 
 ## License
 
